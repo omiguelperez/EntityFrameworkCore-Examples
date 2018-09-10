@@ -1,51 +1,74 @@
 ﻿namespace FinancesDataAccess.TestConsole
 {
     using Microsoft.EntityFrameworkCore;
+    using RandomNameGenerator;
     using System;
     using System.Collections.Generic;
-    using System.Linq;
+    using System.Threading.Tasks;
 
     class Program
     {
         static void Main(string[] args)
         {
-            using (var context = new BloggingContext())
+            using (var context = new FinancesContext())
             {
                 context.Database.EnsureDeleted();
                 context.Database.EnsureCreated();
             }
 
-            #region AddingGraphOfEntities
-            using (var context = new BloggingContext())
-            {
-                var blog = new Blog
-                {
-                    Url = "http://blogs.msdn.com/dotnet",
-                    Posts = new List<Post>
-                    {
-                        new Post { Title = "Intro to C#" },
-                        new Post { Title = "Intro to VB.NET" },
-                        new Post { Title = "Intro to F#" }
-                    }
-                };
+            RegisterCustomers().Wait();
+            ListCustomers().Wait();
+        }
 
-                context.Blogs.Add(blog);
-                context.SaveChanges();
+        static async Task RegisterCustomers()
+        {
+            using (var context = new FinancesContext())
+            {
+                var customers = GetCustomers();
+
+                foreach (var customer in customers)
+                {
+                    await context.Customers.AddAsync(customer);
+                }
+
+                await context.SaveChangesAsync();
             }
-            #endregion
+        }
 
-            #region GettingRelatedData
-            using (var context = new BloggingContext())
+        static async Task ListCustomers()
+        {
+            using (var context = new FinancesContext())
             {
-                var blogs = context.Blogs.Include(b => b.Posts);
-                foreach (var blog in blogs)
+                var customers = await context.Customers
+                    .Include(customer => customer.Accounts)
+                        .ThenInclude(account => account.Transactions)
+                    .ToListAsync();
+
+                foreach (var customer in customers)
                 {
-                    Console.WriteLine($"{blog.BlogId} - {blog.Url}");
+                    DisplayCustomerData(customer);
                 }
                 Console.ReadKey();
             }
-            #endregion
         }
 
+        static void DisplayCustomerData(Customer customer)
+        {
+            Console.WriteLine($"{customer.CustomerId} - {customer.Name} - {customer.SSN}");
+            foreach (var account in customer.Accounts)
+            {
+                Console.WriteLine($"{account.AccountId}");
+                foreach (var transaction in account.Transactions)
+                {
+                    Console.WriteLine($"{transaction.TransactionId} - {transaction.Description} - {transaction.Amount} - {transaction.TransactionDate}");
+                }
+            }
+            Console.WriteLine();
+        }
+
+        static List<Customer> GetCustomers()
+        {
+            return Fake.Customers();
+        }
     }
 }
